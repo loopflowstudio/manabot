@@ -167,7 +167,20 @@ impl Game {
         let mut helped = false;
         // A deliberate tap in a payment previews its own production first.
         let offered_tap = match action {
-            Action::TapForMana { permanent, .. } => Some(AutomaticTap::fixed(*permanent)),
+            Action::TapForMana { permanent, .. } => {
+                if !self
+                    .payment_model(player, None)
+                    .sources
+                    .iter()
+                    .any(|source| source.permanent == *permanent && source.fixed.is_some())
+                {
+                    return Ok(PaymentPreview::message(
+                        PaymentPreviewState::NeedsChoice,
+                        "Choose the bonus mana this tap produces.",
+                    ));
+                }
+                Some(AutomaticTap::fixed(*permanent))
+            }
             _ => None,
         };
         // A resolving instruction's offer (CR 608.2g) or a priority play;
@@ -270,7 +283,9 @@ impl Game {
                     Decision::Payment(payment) => match payment.owed.first().cloned() {
                         Some(CostComponent::Mana { cost, .. }) => {
                             sources.extend(
-                                offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)),
+                                offered_tap
+                                    .map(|tap| position.to_mut().preview_tap(player, tap))
+                                    .transpose()?,
                             );
                             resolution = Some((payment, suspended.frame));
                             Some(cost)
@@ -286,8 +301,11 @@ impl Game {
                 }
                 Some(PendingChoice::Pay { payment, .. }) => {
                     helped = keyword_help(&payment.owed);
-                    sources
-                        .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));
+                    sources.extend(
+                        offered_tap
+                            .map(|tap| position.to_mut().preview_tap(player, tap))
+                            .transpose()?,
+                    );
                     if payment.waterbends() {
                         position.to_mut().pending_choice = None;
                     }
@@ -365,10 +383,9 @@ impl Game {
             return Ok(preview);
         };
         let position = position.to_mut();
-        sources.extend(
-            taps.into_iter()
-                .map(|tap| position.preview_tap(player, tap)),
-        );
+        for tap in taps {
+            sources.push(position.preview_tap(player, tap)?);
+        }
         let pool = position.pooled_mana(player);
         if let Some((payment, frame)) = resolution {
             *position.state.suspended_decision_mut() = Some(SuspendedResolution {
@@ -411,7 +428,11 @@ impl Game {
     }
     /// Run only the selected production on the isolated preview position. Its
     /// pool delta includes triggered production, spend riders and expiry.
-    fn preview_tap(&mut self, player: PlayerId, tap: AutomaticTap) -> PaymentSourcePreview {
+    fn preview_tap(
+        &mut self,
+        player: PlayerId,
+        tap: AutomaticTap,
+    ) -> Result<PaymentSourcePreview, AgentError> {
         let permanent = tap.permanent;
         let object = self.permanent_object(permanent).expect("planned source");
         let source = SubjectRef::Object {
@@ -422,7 +443,7 @@ impl Game {
         };
         let label = self.observed_object_name(object);
         let before = self.pooled_mana(player);
-        self.perform_automatic_tap(player, tap);
+        self.perform_automatic_tap(player, tap)?;
         let after = self.pooled_mana(player);
         let mut output = Mana {
             mana: std::array::from_fn(|i| after.mana[i] - before.mana[i]),
@@ -435,11 +456,11 @@ impl Game {
                 std::array::from_fn(|i| amounts[i] - previous[i]),
             ));
         }
-        PaymentSourcePreview {
+        Ok(PaymentSourcePreview {
             source,
             label,
             output: PreviewPool::from(&output),
-        }
+        })
     }
 }
 

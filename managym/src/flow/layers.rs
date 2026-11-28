@@ -3143,11 +3143,31 @@ pub(super) fn matches_view(
     view: &Characteristics,
     source: Option<PredicateSource<'_>>,
 ) -> bool {
-    let Some(permanent) = game.state.permanents[id].as_ref() else {
-        return false;
-    };
+    live_predicate_view(game, id, view).is_some_and(|view| view.matches(p, source))
+}
+
+/// Test the tapped status a mana trigger will see. Layered characteristics
+/// still come from the given board.
+pub(super) fn matches_view_after_tap(
+    game: &Game,
+    id: PermanentId,
+    p: &CardPredicate,
+    view: &Characteristics,
+) -> bool {
+    live_predicate_view(game, id, view).is_some_and(|mut view| {
+        view.tapped = true;
+        view.matches(p, None)
+    })
+}
+
+fn live_predicate_view<'a>(
+    game: &'a Game,
+    id: PermanentId,
+    view: &'a Characteristics,
+) -> Option<CharacteristicView<'a>> {
+    let permanent = game.state.permanents[id].as_ref()?;
     let object = &game.state[permanent.object];
-    CharacteristicView {
+    Some(CharacteristicView {
         types: &view.types,
         subtypes: &view.subtypes,
         all_creature_types: view.has_all_creature_types(),
@@ -3167,8 +3187,7 @@ pub(super) fn matches_view(
             object: permanent.object,
         },
         counters: &permanent.counters,
-    }
-    .matches(p, source)
+    })
 }
 
 /// The characteristics and permanent status a battlefield predicate reads,

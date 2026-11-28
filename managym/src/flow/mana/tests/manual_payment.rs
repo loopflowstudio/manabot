@@ -6,7 +6,7 @@ use crate::{
             Decision, EffectFrame, ManaProduction, ManaUpfrontActivation, SuspendedResolution,
         },
         game::{ActivationSource, Game, PendingChoice},
-        mana::Obligation,
+        mana::{preview::PaymentPreviewState, Obligation},
         payment::{CostComponent, Operation, Payment, PaymentProgress},
         turn::StepKind,
     },
@@ -20,8 +20,9 @@ use crate::{
         game_object::{PermanentId, PlayerId},
         mana::{Color, Mana, ManaCost},
         permanent::{CounterKind, EntryChoice},
-        player::{ManaFloats, PlayerConfig},
+        player::{ManaFloats, ManaPayment, PlayerConfig},
         predicate::CardPredicate,
+        stack_object::StackObject,
         zone::ZoneType,
     },
     Env,
@@ -450,46 +451,139 @@ fn fixed_mana_tap_can_open_a_bonus_choice() {
         .predicate
         .tapped = true;
 
-    cast_only_card(&mut game, player, "Sokka, Bold Boomeranger");
-    action_index(
-        &game,
-        Action::TapForMana {
-            player,
-            permanent: mountain,
-        },
-    );
-
-    let model = game.payment_model(player, None);
-    let source = model
-        .sources
-        .iter()
-        .find(|source| source.permanent == mountain)
-        .unwrap();
-    let produced = Mana::parse("UR");
-    assert_eq!(source.fixed.as_ref(), Some(&produced));
-
-    // Follow production to the bonus boundary. The tap makes Heartbeat
-    // applicable, and the resolver returns a decision to retain.
-    let mut fork = game.clone();
-    assert!(fork.tap_permanent(mountain, true));
-    let origin = fork.mana_origin(mountain_object);
-    fork.state
-        .mana_pool_mut(player)
-        .add(&produced, Some(origin));
-    let tapped = fork.tapped_for_mana(mountain);
-    let bonuses = fork.production_bonuses(player, &tapped);
-    let decision =
-        fork.resolve_mana_bonuses(player, mountain_object, &produced, bonuses, None, None);
+    let mut automatic = game.clone();
+    automatic.mana_payment[player.0] = ManaPayment::Auto;
+    cast_only_card(&mut automatic, player, "Sokka, Bold Boomeranger");
+    assert!(automatic.pending_choice.is_none());
+    assert!(automatic.state.suspended_decision.is_none());
     assert!(matches!(
-        decision.as_deref(),
+        automatic.state.stack_objects.as_slice(),
+        [StackObject::Spell(_)]
+    ));
+
+    cast_only_card(&mut game, player, "Sokka, Bold Boomeranger");
+    let tap = Action::TapForMana {
+        player,
+        permanent: mountain,
+    };
+    let frame = game.semantic_decision_frame().unwrap();
+    let preview = game
+        .payment_preview(
+            player,
+            frame.revision,
+            &frame.fingerprint,
+            action_index(&game, tap.clone()),
+        )
+        .unwrap();
+    assert_eq!(preview.state, PaymentPreviewState::NeedsChoice);
+    assert!(preview.sources.is_empty());
+
+    step_action(&mut game, tap).unwrap();
+    assert_eq!(game.pooled_mana(player), Mana::parse("UR"));
+    assert!(game
+        .pending_payment(player)
+        .unwrap()
+        .receipt
+        .mana()
+        .is_empty());
+    let colors = [Mana::parse("U"), Mana::parse("R")];
+    assert!(matches!(
+        game.state.suspended_decision.as_ref().map(|s| &s.decision),
         Some(Decision::ManaChoice {
             player: chooser,
             choices,
             production: ManaProduction::Bonus { source, .. },
             ..
         }) if *chooser == player && *source == heartbeat_object
-            && choices == &[Mana::parse("U"), Mana::parse("R")]
+            && choices == &colors
     ));
+    for (mode, color) in colors.into_iter().enumerate() {
+        let mut fork = game.clone();
+        step_action(&mut fork, Action::ChooseMode { player, mode }).unwrap();
+        let [StackObject::Spell(spell)] = fork.state.stack_objects.as_slice() else {
+            panic!("Sokka should reach the stack after paying");
+        };
+        let base_origin = game.mana_origin(mountain_object);
+        assert_eq!(spell.spent.amounts(), Mana::parse("UR").mana);
+        assert!(spell
+            .spent
+            .mana()
+            .iter()
+            .all(|unit| unit.source == Some(base_origin)));
+        assert_eq!(fork.pooled_mana(player), color);
+        let surplus = fork
+            .state
+            .mana_pool_mut(player)
+            .spend_at(0, &Default::default());
+        assert_eq!(surplus.source, Some(game.mana_origin(heartbeat_object)));
+    }
+}
+
+#[test]
+fn fixed_mana_bonus_choice_resumes_upfront_payment() {
+    let player = PlayerId(0);
+    let mut game = payment_game(
+        348,
+        [
+            ("Island", 37),
+            ("Mountain", 1),
+            ("Heartbeat of Spring", 1),
+            ("Gray Ogre", 1),
+        ],
+    );
+    game.keep_opening_hands();
+    let mountain = game
+        .scenario_force_battlefield(player, "Mountain", true)
+        .unwrap();
+    let heartbeat = game
+        .scenario_force_battlefield(player, "Heartbeat of Spring", true)
+        .unwrap();
+    let ogre = game
+        .scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    let mountain_object = game.permanent_object(mountain).unwrap();
+    let heartbeat_object = game.permanent_object(heartbeat).unwrap();
+    let ogre_object = game.permanent_object(ogre).unwrap();
+    game.state[mountain_object].mana_abilities = vec![ManaAbility {
+        mana: Mana::parse("UR"),
+    }];
+    game.state[heartbeat_object].triggered_mana_abilities[0]
+        .predicate
+        .any_of = vec![CardPredicate {
+        tapped: true,
+        ..Default::default()
+    }];
+    game.state[ogre_object].activated_abilities = vec![ActivatedAbilityDefinition {
+        mana_cost: ManaCost::parse("UR"),
+        tap_source: true,
+        effects: vec![Effect::add_mana(Mana::parse("G"))],
+        ..Default::default()
+    }];
+    game.activate_mana_ability(player, ogre, 0).unwrap();
+    game.tick().unwrap();
+    step_action(
+        &mut game,
+        Action::TapForMana {
+            player,
+            permanent: mountain,
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        game.state.suspended_decision.as_ref().map(|s| &s.decision),
+        Some(Decision::ManaChoice {
+            production: ManaProduction::Bonus { .. },
+            resume: Some(resume),
+            ..
+        }) if matches!(resume.as_ref(), Decision::ManaUpfront { permanent, .. } if *permanent == ogre)
+    ));
+    step_action(&mut game, Action::ChooseMode { player, mode: 1 }).unwrap();
+    while game.state.suspended_decision.is_some() {
+        assert_eq!(game.action_space().unwrap().actions.len(), 1);
+        game.step(0).unwrap();
+    }
+    assert_eq!(game.pooled_mana(player), Mana::parse("RG"));
+    assert!(game.state.permanents[ogre].as_ref().unwrap().tapped);
 }
 
 #[test]

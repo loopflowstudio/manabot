@@ -789,6 +789,7 @@ struct TapOptions {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ManaActivation {
+    kind: ManaActivationKind,
     /// An unrestricted-use tap with no other costs, effects or triggered output choice.
     automatic: bool,
     tap_source: bool,
@@ -797,11 +798,25 @@ struct ManaActivation {
     limited: bool,
     sacrifice_source: bool,
     counter_cost: Option<ManaCounterCost>,
-    ability_index: usize,
     cost: ManaCost,
     outputs: ManaChoices,
     life_cost: u32,
     life_delta: i32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ManaActivationKind {
+    FixedTap,
+    Activated(usize),
+}
+
+impl ManaActivationKind {
+    fn step(self, permanent: PermanentId) -> PaymentStep {
+        match self {
+            Self::FixedTap => PaymentStep::Fixed(permanent),
+            Self::Activated(index) => PaymentStep::Activate(permanent, index),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -923,6 +938,10 @@ enum PaymentStep {
 impl PaymentStep {
     fn action(&self, player: PlayerId) -> Option<Action> {
         match self {
+            Self::Fixed(permanent) => Some(Action::TapForMana {
+                player,
+                permanent: *permanent,
+            }),
             Self::Activate(permanent, ability_index) => Some(Action::ActivateAbility {
                 player,
                 permanent: *permanent,
@@ -940,7 +959,7 @@ impl PaymentStep {
                 player,
                 permanent: *permanent,
             }),
-            Self::Convoke(_) | Self::Fixed(_) | Self::Spend => None,
+            Self::Convoke(_) | Self::Spend => None,
         }
     }
 }
@@ -1757,7 +1776,7 @@ impl PaymentModel<'_> {
         if ability.limited {
             Arc::make_mut(&mut model.sources)[source_index]
                 .abilities
-                .retain(|a| a.ability_index != ability.ability_index);
+                .retain(|a| a.kind != ability.kind);
         }
         let mut obligations = PaymentModel::activation_obligations(ability);
         obligations.extend_from_slice(pending_obligations);
@@ -2242,10 +2261,7 @@ impl PaymentModel<'_> {
                             next.resources.use_ability(index, ability_index);
                         }
                         if let Some(mut path) = self.witness(next, policy, visited) {
-                            path.insert(
-                                0,
-                                PaymentStep::Activate(source.permanent, ability.ability_index),
-                            );
+                            path.insert(0, ability.kind.step(source.permanent));
                             return Some(path);
                         }
                     }
@@ -3402,9 +3418,12 @@ impl Game {
                     && (!source.summoning_sick
                         || !characteristics.restricted_by_summoning_sickness());
                 let prohibited = self.activations_prohibited(permanent);
-                let fixed = (can_tap && !prohibited && !characteristics.mana_abilities.is_empty())
-                    .then(|| self.fixed_source_mana(player, permanent, &characteristics, &triggers))
-                    .flatten();
+                let (fixed, fixed_choice) =
+                    if can_tap && !prohibited && !characteristics.mana_abilities.is_empty() {
+                        self.fixed_tap_payment(player, permanent, &characteristics, &triggers)
+                    } else {
+                        (None, None)
+                    };
                 let abilities = characteristics
                     .activated_abilities
                     .iter()
@@ -3426,6 +3445,7 @@ impl Game {
                             outputs = production_alternatives(outputs, &bonuses);
                         }
                         Some(ManaActivation {
+                            kind: ManaActivationKind::Activated(index),
                             automatic,
                             tap_source: ability.tap_source,
                             tap_count: ability.tap_cost.as_ref().map_or(0, |cost| cost.count),
@@ -3444,13 +3464,13 @@ impl Game {
                                     available: source.counter_count(kind),
                                 }
                             }),
-                            ability_index: index,
                             cost: ability.mana_cost.clone(),
                             outputs: outputs.into(),
                             life_cost: ability.life_cost,
                             life_delta: self.mana_suffix_life_delta(player, source.object, suffix),
                         })
                     })
+                    .chain(fixed_choice)
                     .collect();
                 Some(ManaSource {
                     permanent,
@@ -3652,7 +3672,7 @@ impl Game {
         let Some(ability_pos) = base.sources[source_index]
             .abilities
             .iter()
-            .position(|ability| ability.ability_index == ability_index)
+            .position(|ability| ability.kind == ManaActivationKind::Activated(ability_index))
         else {
             return false;
         };
@@ -3713,11 +3733,7 @@ impl Game {
                     if (include_simple_taps || !ability.automatic)
                         && check_ability(source_index, pos)
                     {
-                        actions.push(Action::ActivateAbility {
-                            player,
-                            permanent: source.permanent,
-                            ability_index: ability.ability_index,
-                        });
+                        actions.extend(ability.kind.step(source.permanent).action(player));
                     }
                 }
                 break;
@@ -3747,11 +3763,7 @@ impl Game {
                     assert!(pos < 64, "source has >= 64 activated mana abilities");
                     debug_assert_eq!(
                         cached & (1_u64 << pos) != 0,
-                        self.can_activate_mana_ability(
-                            player,
-                            source.permanent,
-                            ability.ability_index
-                        ),
+                        check_ability(source_index, pos),
                         "deduplicated mana ability feasibility differed from exact witness"
                     );
                 }
@@ -3773,11 +3785,7 @@ impl Game {
                 if (include_simple_taps || !ability.automatic)
                     && feasible_mask & (1_u64 << pos) != 0
                 {
-                    actions.push(Action::ActivateAbility {
-                        player,
-                        permanent: source.permanent,
-                        ability_index: ability.ability_index,
-                    });
+                    actions.extend(ability.kind.step(source.permanent).action(player));
                 }
             }
         }
@@ -3796,10 +3804,20 @@ impl Game {
         let obligations = self.payment_obligations(player);
         let model = self.payment_model(player, None);
         let ordinary_len = actions.len();
-        for source in model.sources.iter().filter(|source| source.untapped) {
-            let Some(output) = &source.fixed else {
+        for (index, source) in model.sources.iter().enumerate().filter(|(_, s)| s.untapped) {
+            let fixed_choice = source
+                .fixed
+                .is_none()
+                .then(|| {
+                    source
+                        .abilities
+                        .iter()
+                        .position(|a| a.kind == ManaActivationKind::FixedTap)
+                })
+                .flatten();
+            if source.fixed.is_none() && fixed_choice.is_none() {
                 continue;
-            };
+            }
             let tap = Action::TapForMana {
                 player,
                 permanent: source.permanent,
@@ -3807,14 +3825,26 @@ impl Game {
             if actions[..ordinary_len].contains(&tap) {
                 continue;
             }
-            if !obligations.is_empty() {
-                let mut pool = self.pooled_mana(player);
-                pool.add(output);
-                if !model.payable_after_tap(source.permanent, pool, obligations.clone()) {
-                    continue;
+            let payable = if let Some(output) = &source.fixed {
+                obligations.is_empty() || {
+                    let mut pool = self.pooled_mana(player);
+                    pool.add(output);
+                    model.payable_after_tap(source.permanent, pool, obligations.clone())
                 }
+            } else {
+                fixed_choice.is_some_and(|pos| {
+                    obligations.is_empty()
+                        || model.activation_payable(
+                            index,
+                            pos,
+                            &self.pooled_mana(player),
+                            &obligations,
+                        )
+                })
+            };
+            if payable {
+                actions.push(tap);
             }
-            actions.push(tap);
         }
     }
 
@@ -3937,10 +3967,6 @@ impl Game {
         let next = next.ok_or_else(|| AgentError("committed payment has no next step".into()))?;
         Ok(match next {
             PaymentStep::Spend => Some(Action::PayCost { player }),
-            PaymentStep::Fixed(permanent) => Some(Action::TapForMana {
-                player,
-                permanent: *permanent,
-            }),
             step => step.action(player),
         })
     }
@@ -4288,6 +4314,9 @@ impl Game {
                     first = Some(output);
                 }
                 for ability in source.abilities.iter().filter(|ability| ability.automatic) {
+                    let ManaActivationKind::Activated(index) = ability.kind else {
+                        unreachable!("automatic choice taps are activated abilities");
+                    };
                     let mut offered = false;
                     for output in ability.outputs.iter() {
                         if offered
@@ -4313,7 +4342,7 @@ impl Game {
                         }
                     }
                     if offered && !options.explicit {
-                        offered_abilities.push(ability.ability_index);
+                        offered_abilities.push(index);
                     }
                 }
                 ProfileTap {
@@ -4383,8 +4412,8 @@ impl Game {
         PaymentTaps::Choose(abilities)
     }
 
-    /// Tap one offered fixed source; an announced payment then advances
-    /// (`advance_payment`), finishing once no mana is owed.
+    /// Tap an offered fixed source. Finish its mana production before
+    /// committing any of the new units to the enclosing payment.
     pub(crate) fn tap_for_mana_action(
         &mut self,
         player: PlayerId,
@@ -4395,10 +4424,27 @@ impl Game {
             && self.mana_capture(player).is_some())
         .then(|| self.state.players[player.0].mana_pool.total());
         let start = self.state.players[player.0].mana_pool.unit_count();
-        self.tap_fixed_mana_source(player, permanent);
+        let (source, produced, bonuses) =
+            self.tap_mana_source(player, AutomaticTap::fixed(permanent));
+        // The caller's decision is still active for an exact tap. Move it into
+        // the bonus only when the payer must make a choice.
+        let choice =
+            self.resolve_mana_bonuses(player, source, &produced, bonuses, None, Some(start));
         if let Some(before) = before {
             let produced = self.state.players[player.0].mana_pool.total() - before;
             self.mana_capture(player).unwrap().float(produced);
+        }
+        if let Some(mut choice) = choice {
+            let (frame, caller) = self.take_mana_caller(player);
+            let Decision::ManaChoice { resume, .. } = choice.as_mut() else {
+                unreachable!("mana production suspends only for a bonus choice");
+            };
+            *resume = caller;
+            *self.state.suspended_decision_mut() = Some(SuspendedResolution {
+                frame,
+                decision: *choice,
+            });
+            return Ok(());
         }
         if self.state.suspended_decision.is_some() {
             return self.advance_mana_upfront();
@@ -4828,10 +4874,7 @@ impl Game {
         ));
         self.state
             .record_activation(permanent, ability_index, ability);
-        let (frame, resume) = match self.state.suspended_decision_mut().take() {
-            Some(caller) => (caller.frame, Some(Box::new(caller.decision))),
-            None => (EffectFrame::new(player, Vec::new()), None),
-        };
+        let (frame, resume) = self.take_mana_caller(player);
         *self.state.suspended_decision_mut() = Some(SuspendedResolution {
             frame,
             decision: Decision::ManaUpfront {
@@ -4844,6 +4887,13 @@ impl Game {
             },
         });
         self.advance_mana_upfront()
+    }
+
+    fn take_mana_caller(&mut self, player: PlayerId) -> (EffectFrame, Option<Box<Decision>>) {
+        match self.state.suspended_decision_mut().take() {
+            Some(caller) => (caller.frame, Some(Box::new(caller.decision))),
+            None => (EffectFrame::new(player, Vec::new()), None),
+        }
     }
 
     /// Keep only selections that leave a complete witness for every caller.
@@ -4946,7 +4996,9 @@ impl Game {
         let cost = activation.mana_cost.clone();
         for step in path {
             match step {
-                PaymentStep::Fixed(source) => self.tap_fixed_mana_source(player, source),
+                PaymentStep::Fixed(source) => {
+                    self.perform_automatic_tap(player, AutomaticTap::fixed(source))?;
+                }
                 PaymentStep::Spend => break,
                 _ => unreachable!("validated automatic prefix"),
             }
@@ -5064,14 +5116,31 @@ impl Game {
         }
     }
 
-    /// Tap a source of fixed mana for mana and resolve its triggered mana
-    /// abilities. The planner offers only sources whose bonuses need no
-    /// choice (`fixed_source_mana`), so this never suspends.
-    fn tap_fixed_mana_source(&mut self, player: PlayerId, permanent: PermanentId) {
-        self.perform_automatic_tap(player, AutomaticTap::fixed(permanent));
+    /// Execute a tap from an exact production prefix, including fixed bonuses.
+    fn perform_automatic_tap(
+        &mut self,
+        player: PlayerId,
+        tap: AutomaticTap,
+    ) -> Result<(), AgentError> {
+        let (source, produced, bonuses) = self.tap_mana_source(player, tap);
+        if self
+            .resolve_mana_bonuses(player, source, &produced, bonuses, None, None)
+            .is_some()
+        {
+            return Err(AgentError(
+                "automatic mana prefix encountered a bonus choice".into(),
+            ));
+        }
+        Ok(())
     }
 
-    fn perform_automatic_tap(&mut self, player: PlayerId, tap: AutomaticTap) {
+    /// Produce the source's own mana, then read its bonuses from the live
+    /// tapped board. Both deliberate taps and batch payment use this transition.
+    fn tap_mana_source(
+        &mut self,
+        player: PlayerId,
+        tap: AutomaticTap,
+    ) -> (ObjectId, Mana, Vec<PendingManaBonus>) {
         let permanent = tap.permanent;
         let produced = tap
             .output
@@ -5085,32 +5154,47 @@ impl Game {
             .mana_pool_mut(player)
             .add(&produced, Some(origin));
         let tapped = self.tapped_for_mana(permanent);
-        let bonuses = self.production_bonuses(player, &tapped);
-        let resolved = self.resolve_mana_bonuses(player, source, &produced, bonuses, None, None);
-        assert!(
-            resolved.is_none(),
-            "an automatic tap's bonuses need no choice"
-        );
+        (source, produced, self.production_bonuses(player, &tapped))
     }
 
-    /// Fixed tap output plus its triggered mana abilities' mana, or `None`
-    /// when a bonus would need a choice among several produced types (no
-    /// current fixed source produces more than one type). Callers check that
-    /// the source has mana abilities, can tap and has not lost its abilities.
-    fn fixed_source_mana(
+    /// A tap's deterministic output or, if a bonus opens a choice, the
+    /// activation the search must include in a witness.
+    fn fixed_tap_payment(
         &self,
         player: PlayerId,
         permanent: PermanentId,
         view: &Characteristics,
         triggers: &[ManaTrigger],
-    ) -> Option<Mana> {
+    ) -> (Option<Mana>, Option<ManaActivation>) {
         let bonuses = self.tap_bonuses(triggers, player, permanent);
         let output = fixed_output(view);
         if bonuses.is_empty() {
-            return Some(output);
+            return (Some(output), None);
         }
+        let has_choice = bonuses
+            .iter()
+            .any(|bonus| bonus.alternatives(&output).len() > 1);
         let mut outputs = production_alternatives(vec![output], &bonuses);
-        (outputs.len() == 1).then(|| outputs.pop().unwrap())
+        if !has_choice {
+            return (outputs.pop(), None);
+        }
+        (
+            None,
+            Some(ManaActivation {
+                kind: ManaActivationKind::FixedTap,
+                automatic: false,
+                tap_source: true,
+                tap_count: 0,
+                tap_candidates: Default::default(),
+                limited: false,
+                sacrifice_source: false,
+                counter_cost: None,
+                cost: ManaCost::default(),
+                outputs: outputs.into(),
+                life_cost: 0,
+                life_delta: 0,
+            }),
+        )
     }
 
     /// Every triggered mana ability on the battlefield, with its source and
@@ -5149,7 +5233,14 @@ impl Game {
             .iter()
             .filter(|trigger| {
                 trigger.ability.who.includes(trigger.controller, producer)
-                    && self.permanent_matches_predicate(tapped, &trigger.ability.predicate)
+                    && self.with_layer_view(tapped, |view| {
+                        super::layers::matches_view_after_tap(
+                            self,
+                            tapped,
+                            &trigger.ability.predicate,
+                            view,
+                        )
+                    })
             })
             .map(|trigger| trigger.ability.output.clone())
             .collect()
@@ -5287,7 +5378,7 @@ impl Game {
         cost: &ManaCost,
     ) -> Result<(), AgentError> {
         for tap in self.automatic_taps(player, cost)? {
-            self.perform_automatic_tap(player, tap);
+            self.perform_automatic_tap(player, tap)?;
         }
         Ok(())
     }
@@ -5362,7 +5453,7 @@ impl Game {
                     let activation = source
                         .abilities
                         .iter()
-                        .find(|a| a.ability_index == ability)?;
+                        .find(|a| a.kind == ManaActivationKind::Activated(ability))?;
                     Some(activation.outputs[mode].clone())
                 }
                 _ => None,
@@ -5821,7 +5912,8 @@ impl Game {
             {
                 continue;
             }
-            if let Some(mana) = self.fixed_source_mana(player, permanent_id, &view, &triggers) {
+            if let (Some(mana), _) = self.fixed_tap_payment(player, permanent_id, &view, &triggers)
+            {
                 total.add(&mana);
             }
         }

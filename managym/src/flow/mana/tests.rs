@@ -1,8 +1,8 @@
 mod manual_payment;
 
 use super::{
-    tap_obligations, ManaActivation, ManaSource, ManaUpfrontActivation, Obligation, PaymentModel,
-    PaymentSearch, PaymentSearchState, PaymentStep, SourcePolicy, Taps,
+    tap_obligations, ManaActivation, ManaActivationKind, ManaSource, ManaUpfrontActivation,
+    Obligation, PaymentModel, PaymentSearch, PaymentSearchState, PaymentStep, SourcePolicy, Taps,
 };
 use crate::cards::content_pack::ContentPack;
 use crate::state::{
@@ -419,6 +419,7 @@ thread_local! {
 
 pub(in crate::flow::mana) fn tapping_ability(outputs: Vec<Mana>) -> ManaActivation {
     ManaActivation {
+        kind: ManaActivationKind::Activated(0),
         automatic: true,
         tap_source: true,
         tap_count: 0,
@@ -426,7 +427,6 @@ pub(in crate::flow::mana) fn tapping_ability(outputs: Vec<Mana>) -> ManaActivati
         limited: false,
         sacrifice_source: false,
         counter_cost: None,
-        ability_index: 0,
         cost: ManaCost::default(),
         outputs: outputs.into(),
         life_cost: 0,
@@ -2374,6 +2374,7 @@ fn payable_fixed_sufficient_and_useful_taps_dedup_preserve_exact_semantics() {
 #[test]
 fn witness_sibling_pruning_matches_identity_search_on_duplicate_filters() {
     let filter = ManaActivation {
+        kind: ManaActivationKind::Activated(0),
         automatic: false,
         tap_source: true,
         tap_count: 0,
@@ -2381,7 +2382,6 @@ fn witness_sibling_pruning_matches_identity_search_on_duplicate_filters() {
         limited: false,
         sacrifice_source: false,
         counter_cost: None,
-        ability_index: 0,
         cost: ManaCost::parse("1"),
         outputs: vec![Mana::parse("W"), Mana::parse("U")].into(),
         life_cost: 0,
