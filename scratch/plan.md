@@ -3,8 +3,11 @@
 Stacked on MTG-497, which lands first and is gated on `etude-sdk 0.5.0`.
 Its Pass 7 enabled zero-copy inputs, separated preparation from sampling,
 and fixed the failure backlog's slot grant. All 512 Gate 1 games replayed,
-and the MPS compilation probe favored eager execution. See the MTG-497 plan
-at `bf5bb9c70d` and `experiments/reports/eval_throughput.md`.
+and the MPS compilation probe favored eager execution. Pass 8 aligned
+observation layout checks with slot reuse, delivered checkpoint errors before
+requesting replacement legs, and shared the trophy pairing's 120-second game
+budget with the throughput probe. See the MTG-497 plan at `85a3a5fb48` and
+`experiments/reports/eval_throughput.md`.
 
 ## Outcome
 

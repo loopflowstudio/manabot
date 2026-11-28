@@ -241,7 +241,8 @@ uv run --no-sync etude fetch 'tla_trophies_colab_500k_v2/w160l8@40902' \
 
 Use a fresh output directory for each arm. The default creates the seeded
 `w384l8` checkpoint in that arm's directory. Reuse that file with
-`--checkpoint` to hold the bytes fixed across arms.
+`--checkpoint` to hold the bytes fixed across arms. The driver uses the
+trophy runner's 120-second game budget.
 
 ```bash
 uv run --no-sync python -m experiments.eval_throughput \

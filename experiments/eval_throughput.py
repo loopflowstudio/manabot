@@ -26,11 +26,10 @@ import torch
 from experiments.mana_taps import OBSERVATION
 from experiments.tla_frontier import HEURISTIC, model
 from experiments.tla_trophies import (
-    POOLS,
-    ROOT,
     corpus_input,
+    corpus_path,
     held_out_deal,
-    held_out_matchup,
+    held_out_pairing,
     playable,
 )
 from manabot.backends.torch.checkpoint import save_checkpoint
@@ -54,7 +53,6 @@ from manabot.sim.registration import EvalPrecision
 ARENA = "eval-throughput"
 DEALS = 32
 RANDOM_SEED = 1
-GAME_SECONDS = 600.0
 
 
 @dataclass
@@ -93,13 +91,12 @@ def random_checkpoint(path: Path, width: int) -> None:
 
 
 def trophy_deals(
-    ref: CheckpointRef, count: int, corpus_path: Path, precision: EvalPrecision
+    ref: CheckpointRef, count: int, precision: EvalPrecision
 ) -> tuple[Code, dict[str, PairingSpec], list[Match]]:
     source = corpus_input()
-    if file_sha256(corpus_path) != source.sha256:
-        raise ValueError(
-            f"trophy corpus differs from the data manifest at {corpus_path}"
-        )
+    path = corpus_path()
+    if file_sha256(path) != source.sha256:
+        raise ValueError(f"trophy corpus differs from the data manifest at {path}")
     pools = playable("held_out")
     if len(pools) < 2 * count:
         raise ValueError(f"the trophy split has fewer than {2 * count} playable pools")
@@ -112,17 +109,14 @@ def trophy_deals(
     specs: dict[str, PairingSpec] = {}
     matches: list[Match] = []
     for i in range(count):
-        deal = held_out_deal(i)
-        match = Match(players=(candidate, heuristic), config=deal.model_dump())
-        matches.append(match)
-        specs[match.key] = PairingSpec(
-            matchup=held_out_matchup(deal, pools, source.sha256),
-            deal=deal.seed,
-            matchup_mode="cross",
-            game_seconds=GAME_SECONDS,
-            arena=ARENA,
-            precision=precision,
+        deal = held_out_deal(i, precision)
+        # The throughput arms share the same match keys across precisions.
+        match = Match(
+            players=(candidate, heuristic),
+            config=deal.model_dump(exclude={"precision"}),
         )
+        matches.append(match)
+        specs[match.key] = held_out_pairing(deal, pools, source.sha256, arena=ARENA)
     return heuristic, specs, matches
 
 
@@ -197,11 +191,7 @@ def main() -> None:
     parameters = sum(int(value.size) for value in checkpoint.parameters.values())
     del checkpoint
 
-    inputs = os.environ.get("ETUDE_INPUTS_DIR")
-    corpus_path = Path(inputs) / "pools.json" if inputs else ROOT / POOLS
-    heuristic, specs, matches = trophy_deals(
-        ref, args.deals, corpus_path, args.precision
-    )
+    heuristic, specs, matches = trophy_deals(ref, args.deals, args.precision)
     timing = ForwardTiming()
     forward = timed_forward(load_with_precision(ref, args.precision), timing)
     agents = (forward, build(heuristic, {}))

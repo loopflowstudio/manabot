@@ -68,13 +68,16 @@ def corpus_input() -> Input:
     )
 
 
+def corpus_path() -> Path:
+    directory = os.environ.get("ETUDE_INPUTS_DIR")
+    return Path(directory) / "pools.json" if directory else ROOT / POOLS
+
+
 @cache
 def playable(split: PoolSplit) -> tuple[Pool, ...]:
-    directory = os.environ.get("ETUDE_INPUTS_DIR")
-    path = Path(directory) / "pools.json" if directory else ROOT / POOLS
     return tuple(
         p
-        for p in PoolCorpus.read(path).pools
+        for p in PoolCorpus.read(corpus_path()).pools
         if p.split == split
         and not managym.unsupported_cards([*p.cards, *p.human_build])
     )
@@ -206,27 +209,33 @@ def held_out_deal(index: int, precision: EvalPrecision = "float32") -> Deal:
     )
 
 
-def held_out_matchup(
-    deal: Deal, pools: tuple[Pool, ...], corpus_sha256: str
-) -> DeckMatchup:
+def held_out_pairing(
+    deal: Deal,
+    pools: tuple[Pool, ...],
+    corpus_sha256: str,
+    *,
+    arena: str = "tla-trophies",
+) -> PairingSpec:
     first, second = pools[deal.first], pools[deal.second]
-    return DeckMatchup(
+    matchup = DeckMatchup(
         population_sha256=corpus_sha256,
         entries=(first.id, second.id),
         lists=(deck(first), deck(second)),
         decklists="closed",
     )
-
-
-def pairing_spec(match: Match) -> PairingSpec:
-    deal = Deal.model_validate(match.config)
     return PairingSpec(
-        matchup=held_out_matchup(deal, playable("held_out"), corpus_input().sha256),
+        matchup=matchup,
         deal=deal.seed,
         matchup_mode="cross",
         game_seconds=120,
-        arena="tla-trophies",
+        arena=arena,
         precision=deal.precision,
+    )
+
+
+def pairing_spec(match: Match) -> PairingSpec:
+    return held_out_pairing(
+        Deal.model_validate(match.config), playable("held_out"), corpus_input().sha256
     )
 
 
@@ -240,6 +249,10 @@ async def play_many(
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     return held_out_jobs([run for run in state.runs if run.launch == RAW_JOB])
+
+
+def benchmark_name(precision: EvalPrecision) -> str:
+    return BENCHMARK if precision == "float32" else f"{BENCHMARK}-{precision}"
 
 
 def held_out_jobs(
@@ -262,24 +275,27 @@ def held_out_jobs(
         )
         for i in range(32)
     )
+    pools = corpus_input()
+    environment_config = {"pools": pools.sha256}
+    # Float32 keeps the stored tournaments' environment identity.
+    if precision != "float32":
+        environment_config["precision"] = precision
     return [
         EvalJob(
             play_many=play_many,
             agents=agents_for(precision),
             checkpoints=checkpoints,
             tournament=Benchmark(
-                name=BENCHMARK,
+                name=benchmark_name(precision),
                 environment=Environment(
                     name="tla-trophies",
                     # This file and pairing.py when the stored games were played.
                     files=ENVIRONMENT_FILES,
-                    # Float32 keeps the stored tournaments' environment identity.
-                    config={"pools": corpus_input().sha256}
-                    | ({} if precision == "float32" else {"precision": precision}),
+                    config=environment_config,
                 ),
                 seatings=seatings,
             ),
-            inputs=(corpus_input(),),
+            inputs=(pools,),
             setup=machine_setup(" --extra artifacts --extra evaluation"),
             extras=("artifacts", "evaluation"),
             max_hours=1,
@@ -289,8 +305,8 @@ def held_out_jobs(
     ]
 
 
-def report() -> Report:
-    matches = Matches(tournament=BENCHMARK)
+def report(*, precision: EvalPrecision = "float32") -> Report:
+    matches = Matches(tournament=benchmark_name(precision))
     return Report(
         clock="updates",
         score=Score(table="plays", value="score", reference=0.5),

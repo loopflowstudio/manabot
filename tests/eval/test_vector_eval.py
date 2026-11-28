@@ -113,6 +113,14 @@ def observed_forward(
     return forward
 
 
+async def uniform_logits(
+    inputs: list[object], *, rows: int | None = None
+) -> list[object]:
+    [batch] = inputs
+    assert isinstance(batch, Prepared) and rows == batch.batch
+    return [np.zeros(batch.legal.shape, dtype=np.float32)]
+
+
 def play_local(
     source: LocalMatches,
     spec_for: Callable[[Match], PairingSpec],
@@ -887,11 +895,6 @@ def test_vector_runner_bounds_deferred_layouts_before_play(
         for deal, ref in enumerate([checkpoint, *([different_layout] * 6)])
     ]
 
-    async def forward(inputs: list[object], *, rows: int | None = None) -> list[object]:
-        [batch] = inputs
-        assert isinstance(batch, Prepared) and rows == batch.batch
-        return [np.zeros(batch.legal.shape, dtype=np.float32)]
-
     class CountingMatches(LocalMatches):
         granted = 0
 
@@ -901,7 +904,7 @@ def test_vector_runner_bounds_deferred_layouts_before_play(
             return granted
 
     source = CountingMatches(
-        [(match, [forward, build(heuristic, {})]) for match in matches]
+        [(match, [uniform_logits, build(heuristic, {})]) for match in matches]
     )
     matchup = _allies_lessons_matchup()
 
@@ -929,14 +932,85 @@ def test_vector_runner_bounds_deferred_layouts_before_play(
     assert {key for key, _ in settled} == {match.key for match in matches}
 
 
-def test_vector_runner_evicts_failed_checkpoint_across_layout_backlog(
+def test_vector_runner_layout_covers_shared_settings_and_allows_seat_mana(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    cpu_eval: None,
+) -> None:
+    manual = ObservationSpace()
+    auto = ObservationSpace(ObservationConfig(mana_payment="auto"))
+    first_legal = ObservationSpace(ObservationConfig(action_overflow="first-legal"))
+    assert manual.shapes == auto.shapes == first_legal.shapes
+    manual_player, auto_player, first_legal_player = [
+        checkpoint_player(_fixture_checkpoint(tmp_path, seed, space))
+        for seed, space in enumerate((manual, auto, first_legal), start=61)
+    ]
+    heuristic = Code(name="heuristic")
+    first = Match(players=(manual_player, heuristic), games=4, config={"deal": 1})
+    compatible = Match(
+        players=(auto_player, manual_player), games=4, config={"deal": 2}
+    )
+    incompatible = Match(
+        players=(first_legal_player, manual_player), games=4, config={"deal": 3}
+    )
+
+    open_vector = vector_runner.open_vector
+    opened: list[ObservationSpace] = []
+
+    def observe_open(
+        num_envs: int, space: ObservationSpace
+    ) -> tuple[RecordedVectorEnv, dict[str, np.ndarray]]:
+        opened.append(space)
+        return open_vector(num_envs, space)
+
+    monkeypatch.setattr(vector_runner, "open_vector", observe_open)
+    matchup = _allies_lessons_matchup()
+    outcomes = {
+        match.key: outcome
+        for match, outcome in play_local(
+            LocalMatches(
+                [
+                    (first, [uniform_logits, build(heuristic, {})]),
+                    (compatible, [uniform_logits, uniform_logits]),
+                    (incompatible, [uniform_logits, uniform_logits]),
+                ]
+            ),
+            lambda match: PairingSpec(
+                matchup=matchup,
+                deal=int(match.config["deal"]),
+                matchup_mode="cross",
+                game_seconds=60,
+                max_commands=1,
+                arena="fixture-layout-compatibility",
+            ),
+            slots=4,
+            output_dir=tmp_path,
+        )
+    }
+    assert isinstance(outcomes[first.key], Result)
+    assert isinstance(outcomes[compatible.key], Result)
+    error = outcomes[incompatible.key]
+    assert isinstance(error, ValueError)
+    assert str(error) == "players have different vector observation layouts"
+    assert len(opened) == 1 and opened[0].config == manual.config
+    games = read_trace(
+        tmp_path / "arena" / compatible.key / "games" / "candidate__opponent.jsonl"
+    )
+    assert len(games) == 4
+    for game in games:
+        assert game["match_hypers"]["mana_payment"] == [
+            "auto" if player == "candidate" else "manual"
+            for player in game["seat_players"]
+        ]
+
+
+def test_vector_runner_drains_checkpoint_failures_before_backfill(
     tmp_path: Path,
     cpu_eval: None,
 ) -> None:
     slots = 9
     space = ObservationSpace()
-    other_space = ObservationSpace(ObservationConfig(mana_payment="auto"))
-    assert space.config != other_space.config and space.shapes == other_space.shapes
+    other_space = ObservationSpace(ObservationConfig(action_overflow="first-legal"))
     broken_ref = _fixture_checkpoint(tmp_path, 61, space)
     healthy_ref = _fixture_checkpoint(tmp_path, 62, space)
     deferred_ref = _fixture_checkpoint(tmp_path, 63, other_space)
@@ -947,44 +1021,46 @@ def test_vector_runner_evicts_failed_checkpoint_across_layout_backlog(
     opponent = build(heuristic, {})
     error = ForwardError(broken_ref.key, "checkpoint unavailable")
     broken_calls = 0
-    healthy_calls = 0
 
     async def broken(inputs: list[object], *, rows: int | None = None) -> list[object]:
         nonlocal broken_calls
         broken_calls += 1
         raise error
 
-    async def healthy(inputs: list[object], *, rows: int | None = None) -> list[object]:
-        nonlocal healthy_calls
-        [batch] = inputs
-        assert isinstance(batch, Prepared) and rows == batch.batch
-        healthy_calls += 1
-        return [np.zeros(batch.legal.shape, dtype=np.float32)]
-
-    async def deferred(
-        inputs: list[object], *, rows: int | None = None
-    ) -> list[object]:
-        pytest.fail(
-            "a deal containing the failed checkpoint reached the deferred layout"
-        )
-
-    # Eight live failing legs, eight deferred deals with that same checkpoint
-    # in the other seat, then one healthy leg with three siblings queued.
+    # The second broken deal has one seated leg and three queued. The
+    # unrelated layout leaves one more grant available when the forward fails.
     live_failures = [
         Match(players=(failed_player, heuristic), games=4, config={"deal": deal})
         for deal in range(2)
     ]
-    queued_failures = [
-        Match(players=(deferred_player, failed_player), games=4, config={"deal": deal})
+    deferred_matches = [
+        Match(players=(deferred_player, heuristic), games=4, config={"deal": deal})
         for deal in range(2, slots + 1)
     ]
     healthy_match = Match(
         players=(healthy_player, heuristic), games=4, config={"deal": slots + 1}
     )
-    source = LocalMatches(
-        [(match, [broken, opponent]) for match in live_failures]
-        + [(match, [deferred, broken]) for match in queued_failures]
-        + [(healthy_match, [healthy, opponent])]
+    replacement = Match(
+        players=(healthy_player, heuristic), games=4, config={"deal": slots + 2}
+    )
+    failed_keys = {match.key for match in live_failures}
+    delivered_errors: set[str] = set()
+
+    class ObservedMatches(LocalMatches):
+        async def take(self, limit: int) -> list[tuple[Match, Sequence[object]]]:
+            granted = await super().take(limit)
+            if any(match == replacement for match, _ in granted):
+                assert delivered_errors == failed_keys
+            return granted
+
+    source = ObservedMatches(
+        [(live_failures[0], [broken, opponent])]
+        + [(match, [uniform_logits, opponent]) for match in deferred_matches]
+        + [
+            (healthy_match, [uniform_logits, opponent]),
+            (live_failures[1], [broken, opponent]),
+            (replacement, [uniform_logits, opponent]),
+        ]
     )
     matchup = _allies_lessons_matchup()
 
@@ -994,15 +1070,30 @@ def test_vector_runner_evicts_failed_checkpoint_across_layout_backlog(
             deal=int(match.config["deal"]),
             matchup_mode="cross",
             game_seconds=60,
+            max_commands=10_000 if match == healthy_match else 1,
             arena="fixture-failure-backlog",
         )
 
-    settled = play_local(source, spec_for, slots=slots, output_dir=tmp_path)
-    assert broken_calls == 1 and healthy_calls > 0
-    assert len(settled) == len(live_failures) + len(queued_failures) + 1
-    failed_keys = {match.key for match in live_failures + queued_failures}
-    assert {match.key for match, outcome in settled if outcome is error} == failed_keys
-    assert settled[-1][0] == healthy_match and isinstance(settled[-1][1], Result)
+    async def run() -> dict[str, Result | Exception]:
+        outcomes = {}
+        async for match, outcome in play_pairings(
+            source, spec_for, slots=slots, output_dir=tmp_path
+        ):
+            assert match.key not in outcomes
+            outcomes[match.key] = outcome
+            if outcome is error:
+                delivered_errors.add(match.key)
+        return outcomes
+
+    settled = asyncio.run(run())
+    assert broken_calls == 1
+    assert delivered_errors == failed_keys
+    healthy_keys = {
+        match.key for match in [*deferred_matches, healthy_match, replacement]
+    }
+    assert {key for key, outcome in settled.items() if isinstance(outcome, Result)} == (
+        healthy_keys
+    )
     retained = tmp_path / "arena" / healthy_match.key
     games = read_trace(retained / "games" / "candidate__opponent.jsonl")
     assert len(games) == 4

@@ -13,7 +13,7 @@ first:
   - path: manabot/eval/agents.py
     why: Built-in and registered code player lifecycle
   - path: manabot/eval/vector.py
-    why: Native seating and settled leg coordination
+    why: Native seating and match-owned queues for compatible slots
   - path: tests/eval/test_vector_eval.py
     why: Scalar parity, backfill, registered opponents and failure replay
 hide:

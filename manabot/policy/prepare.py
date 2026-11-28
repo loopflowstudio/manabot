@@ -974,12 +974,14 @@ def prepare(
         if native is None
         else native.tables["actions"].records["continuation"]
     ).astype(np.int64, copy=False)
-    candidates = names.astype(np.int64)
+    # Convert the selected columns directly into contiguous lookup arrays.
+    name_rows = names[:, _NAME].astype(np.int64)
     focus = focus.astype(np.int64)
-    if candidates.shape[-1] > max(_GROUP_FIRST, _GROUP_LAST):
-        first, last = candidates[:, _GROUP_FIRST], candidates[:, _GROUP_LAST]
+    if names.shape[-1] > max(_GROUP_FIRST, _GROUP_LAST):
+        first = names[:, _GROUP_FIRST].astype(np.int64)
+        last = names[:, _GROUP_LAST].astype(np.int64)
     else:
-        first = last = np.zeros(len(candidates), np.int64)
+        first = last = np.zeros(len(names), np.int64)
 
     players = [
         read_numeric(obs[f"{seat}_player"], layout.readings[f"{seat}_player"])
@@ -1096,13 +1098,13 @@ def prepare(
         action_features=action_features.astype(f32),
         action_frames=legal_batches * relation_count + (frames - 1).clip(min=0),
         action_frame_mask=(frames != 0).astype(f32),
-        name_rows=np.ascontiguousarray(candidates[:, _NAME]),
-        name_mask=(candidates[:, _NAME] > 0).astype(f32),
+        name_rows=name_rows,
+        name_mask=(name_rows > 0).astype(f32),
         group_first=(first - 1).clip(min=0),
-        group_last=np.ascontiguousarray(last),
+        group_last=last,
         group_mask=(first > 0).astype(f32),
         group_counts=(last - first + 1).clip(min=1).astype(f32),
-        candidate_rows=tables.rows(candidates[:, _NAME_DEFINITION]),
+        candidate_rows=tables.rows(names[:, _NAME_DEFINITION]),
         focus=legal_batches[:, None] * objects
         + object_slots(focus, object_remap, base=0),
         focus_mask=(focus != -1).astype(f32),
@@ -1114,7 +1116,7 @@ def prepare(
         # Full-catalog preparation skips the scan for referenced definitions.
         programs=tables.programs(
             _referenced_definitions(
-                obs, tables, candidates, history=history, memory=memory, native=native
+                obs, tables, names, history=history, memory=memory, native=native
             )
             if select_programs
             else None
@@ -1362,8 +1364,7 @@ def _effects(
         detail_values = obs["effect_details"][live_batches[detail_records], detail_rows]
     else:
         detail_values = native.tables["effect_details"].integers
-    detail_host = detail_values.astype(np.int64)
-    kinds = np.ascontiguousarray(detail_host[:, DETAIL_KIND])
+    kinds = detail_values[:, DETAIL_KIND].astype(np.int64)
     records, member_rows = effect_span_rows(member_offsets, member_counts)
     member_batches = live_batches[records]
     targets = (
@@ -1385,7 +1386,7 @@ def _effects(
     numeric = read_numeric(selected, effect_readings)
     base = live_batches * objects
     unsigned = (
-        record_word(detail_host, DETAIL_VALUE[0])
+        record_word(detail_values, DETAIL_VALUE[0])
         if native is None
         else full_word(detail_values, DETAIL_VALUE[0])
     )
