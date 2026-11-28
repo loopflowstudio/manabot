@@ -314,26 +314,11 @@ Recorded verbatim in `scratch/ship-review-notes.md`:
 
 > (1) `scratch/ship-review.html` § 1 · Maintained experiment migration to native-v3: 1a (2) `scratch/ship-review.html` § 2 · Compact vector decision records: 2a (3) `scratch/ship-review.html` § 3 · Academy Watch native-seat import (F1): 3b (4) `scratch/ship-review.html` § 4 · Pre-existing ScalarCapture seat-policy gap (F3): 4a
 
-Outcome: return to `build` for Pass 7.
-
-7. **Academy Watch native-seat import (`3b`).**
-   - Support importing native-seat `GameRecord`s (e.g. `("agent", "heuristic:64")`,
-     `("heuristic:64", "agent")`, `heuristic`, `random`) in `managym/academy/watch.py`
-     and configured launch (`managym/academy/launch.py`), replacing the
-     `NativeSeatRecord` refusal.
-   - Preserve Academy's two-seat acting-view contract and shared decision
-     surface: verify against the stored record's surfaced actions, digests, and
-     ending while surfacing/reconstructing the native seat's turns cleanly (with
-     exact determinism and no hidden-information leaks).
-   - Update `docs/academy.md` (`#open-a-replay-directly`,
-     `#watch-a-game-from-an-evaluation`) and tests
-     (`tests/academy/test_configured_launch.py` and Watch import tests), and
-     verify opening a real vector heuristic evaluation record in Academy Replay
-     during QA.
+7. **Academy Watch native-seat import** (`b97d43c7c`, choice `3b`) verified retained games with their original seat policies and projected both seats through Academy Commands. Four retained MPS legs imported and Chromium followed both choosers.
 
 ## Deferred findings
 
-- None filed from ship-review (`1a`, `2a`, `4a` accepted/dropped; `3b` moved into Pass 7 above; `etude-sdk 0.5.0` stays owned by stacked parent MTG-497).
+- None filed from ship-review. The next evaluation campaign adopts `native-v3` tournament names. MTG-497 owns `etude-sdk 0.5.0` admission.
 
 ## Acceptance check
 

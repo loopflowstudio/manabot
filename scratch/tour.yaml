@@ -1,4 +1,4 @@
-at: 598663ae160b8dccb17b81446c1983ee91d9f636
+at: b97d43c7c3974cfa80aaa72090a3a043e8188b05
 first:
   - path: experiments/reports/eval_throughput.md
     why: Throughput and replay parity on Apple and L4
@@ -6,6 +6,8 @@ first:
     why: Heuristic versions, decision evidence and replay scheduling
   - path: docs/engine-python.md
     why: Per-slot policies and isolated failure receipts
+  - path: docs/academy.md
+    why: Open vector evaluation games in Replay
   - path: managym/__init__.pyi
     why: Vector seating and inspection API
   - path: managym/src/agent/player_policy.rs
@@ -39,9 +41,11 @@ first:
   - path: managym/src/python/bindings.rs
     why: Scalar replay releases the GIL
   - path: managym/academy/watch.py
-    why: Typed refusal for native-seat evaluation records
+    why: Expand verified native choices into acting-view Commands
+  - path: managym/academy/server.py
+    why: Reproduce random draws at recorded commitment
   - path: managym/academy/launch.py
-    why: Preserve native-seat replay advice on launch
+    why: Open native-seat games through the file launcher
   - path: experiments/eval_throughput.py
     why: Wall time, background replay and corpus check
   - path: tests/eval/test_vector_eval.py
@@ -51,7 +55,9 @@ first:
   - path: tests/eval/test_evaluation_match.py
     why: Scalar capture, audit projection and fingerprint reuse
   - path: tests/academy/test_configured_launch.py
-    why: Native-seat refusal message on Academy launch
+    why: File launch and reimport preserve source identity
+  - path: tests/academy/test_game_records.py
+    why: Swapped seats, viewer safety and divergence coverage
 hide:
   - path: tests/public_api.json
     why: Generated additive signatures

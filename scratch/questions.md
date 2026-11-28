@@ -206,3 +206,15 @@ record that diverges at index 0 on replay. This predates MTG-506. The vector
 capture records its pairs. Left as is; a fix needs an `Env.player_policies`
 getter (Rust plus public API) or a `ScalarCapture(player_policies=...)`
 argument checked against the Env.
+
+MTG-506 Pass 7 uses native exposure capture to obtain the committed choices
+for Academy imports, then binds those choices through Academy's Command path.
+A divergence at the first recorded boundary with no verified actions keeps
+the opening deal with no reconstructed choices.
+
+All four legs in `.runs/qa506/mps-v64/arena/*/games/deals/candidate__opponent.40900.jsonl`
+imported. Leg 0 took 1.44 s to launch with 92 Academy choices from 66 recorded
+checkpoint actions. Chromium followed both native seats with **Show both hands**
+off. Source bytes matched after launch. The earlier `.runs/eval-throughput/mtg506/w160-mps-matched`
+sample diverged at the first digest in the standard verifier on this engine
+build. Its original measurement evidence remains tied to its recorded build.
