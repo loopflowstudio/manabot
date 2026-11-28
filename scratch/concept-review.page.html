@@ -1,4 +1,4 @@
-<h1>MTG-508 Concept Review (Post-Pass 5) · Coupled mana payments, fixed-tap choices, and owned activations</h1>
+<h1>MTG-508 Concept Review (Post-Pass 6) · Coupled mana payments, fixed-tap choices, and owned activations</h1>
 
 <p><strong>Area reviewed:</strong> Mana payment feasibility, execution, preview, and announced non-mana activation lifecycle across
   <code>managym/src/flow/mana.rs</code>, <code>managym/src/flow/mana/{coupled,profile,help,preview,autotapper}.rs</code>,
@@ -6,21 +6,20 @@
   <code>managym/src/flow/action.rs</code>, <code>managym/src/flow/game.rs</code>, <code>managym/src/flow/{layers,statics}.rs</code>,
   <code>managym/src/flow/interchangeable.rs</code>, <code>managym/src/agent/continuation.rs</code>, <code>managym/src/agent/env/snapshot.rs</code>,
   and <code>managym/src/state/hash.rs</code>.
-  This reviews the full five-pass branch at <code>52fb812008</code> against base <code>bc4d2ac17f</code>
-  (freshly fetched <code>origin/main</code> at <code>606e79e90a</code> matches the merge-base tree with MTG-500 merged and
+  This reviews the full six-pass branch at <code>f3779cb5b2</code> against base <code>bc4d2ac17f</code>
+  (freshly fetched <code>origin/main</code> at <code>606e79e90a</code> is already merged into this branch with MTG-500 landed and
   <code>MATCH_STATE_HASH_VERSION = 35</code> vs. <code>36</code> on <code>HEAD</code>; no sync is needed).
 </p>
 
-<p><strong>Overall assessment:</strong> Pass 5 (<code>0f32a515a1</code>) cleanly closed the prior review's four findings—non-tapping
-  sensitive abilities, <code>cost_reduction_per</code> reads, counted taps on <code>stateful_tap()</code> boards, coupled resolution choice taps,
-  the shared <code>complete_upfront</code> guard, and per-model coupling classification on <code>PaymentModel</code>.
-  Passes 1, 3, and 4, the role classifier, and the structural <code>CoupledMemoKey</code> now line up cleanly with the domain.
-  <strong>One conceptual mismatch remains inside <code>CoupledSearch</code>:</strong> Pass 5's <code>DelveCost</code> layering split
-  a helped mana cost (Convoke, Improvise, Waterbend, Delve) into two competing representations—the pure solver's pre-flattened
-  <code>tap_obligations</code> list and a Delve-only side-channel recovered by suffix matching. That split breaks three real
-  coupled-payment interactions: (1) generic Improvise, Waterbend, or off-color Convoke taps hidden behind a colored pip on
-  <code>stateful_tap()</code> boards; (2) Convoke-then-sacrifice+Delve on boards where <code>stateful_delve()</code> is false; and
-  (3) spending the colored tier of a Delve + help-tap cost dropping Delve from its generic tail.
+<p><strong>Overall assessment:</strong> All domain concepts and built code concepts now align—<strong>zero conceptual mismatches remain</strong>.
+  Pass 6 (<code>d6ba796903</code>) closed the sole remaining mismatch from Pass 5 by replacing the split
+  <code>tap_obligations</code> + <code>DelveCost</code> side-channel with a single <code>Obligation::Helped(Box&lt;HelpedCost&gt;)</code>
+  carried directly inside the ordered obligations list and lowered via <code>help_obligations</code> only for the pure solver
+  and pure handoff. Every reachable caller—announced payments, mandatory resolution payments, upfront mana spending,
+  <code>help_taps</code>, <code>delve_payment_objects</code>, <code>useful_payment_taps</code>, <code>tap_activation_payment_possible</code>,
+  and <code>activation_x_payable</code>—routes through the same unified obligation model, while ordinary uncoupled boards keep
+  zero-fork pure solving. Only human confirmation of the irreversible hash v36 bump and headless design choices remains
+  before delivery.
 </p>
 
 <h2>Domain concepts vs. code concepts</h2>
@@ -29,41 +28,41 @@
   <thead>
     <tr>
       <th>Domain concept (player / CR)</th>
-      <th>Built code concept (<code>HEAD</code> <code>52fb812008</code>)</th>
+      <th>Built code concept (<code>HEAD</code> <code>f3779cb5b2</code>)</th>
       <th>Aligned?</th>
-      <th>What is wrong</th>
+      <th>Notes</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong>Helped mana cost on a coupled board</strong> (Convoke, Improvise, Waterbend, Delve): one remaining mana cost + help permissions where any legal tap or Delve exile can happen in any order relative to mana activations, and spending pays the remaining mana cost as a whole.</td>
-      <td>Pre-flattened <code>tap_obligations</code> list (<code>mana.rs:6481</code>) + Delve-only <code>DelveCost</code> side-channel recovered via <code>obligations.ends_with(&amp;modeled)</code> (<code>coupled.rs:175</code>) + <code>paying_delve_cost</code> / <code>saved_delve</code> / <code>stateful_delve()</code> branches (<code>coupled.rs:644-861</code>).</td>
-      <td><strong>No</strong></td>
-      <td><strong>Biggest mismatch (one idea under two representations).</strong> <code>tap_obligations</code> splits one cost into sequential tiers (<code>[Pay(colored, Convoke|None), Pay(keyword, Keyword), Pay(waterbend, Any)]</code>), valid only when tap order does not matter. Inside <code>CoupledSearch</code>: (a) <code>try_help_taps</code> inspects only <code>obligations.first()</code>, making generic Improvise/Waterbend/off-color Convoke taps unreachable before colored pips on <code>stateful_tap()</code> boards; (b) <code>try_help_taps</code> gates <code>next_delve</code> on <code>stateful_delve()</code>, dropping <code>delve</code> after a Convoke tap on sacrifice-coupled boards; (c) spending the first split tier sets <code>saved_delve = None</code>, stripping Delve from the remaining generic tier on <code>stateful_delve()</code> boards.</td>
+      <td><strong>Helped mana cost on a coupled board</strong> (Convoke, Improvise, Waterbend, Delve): one remaining mana cost + help permissions where any legal tap or Delve exile can interleave in any order with mana activations, and spending pays the remaining mana cost as a whole.</td>
+      <td><code>Obligation::Helped(Box&lt;HelpedCost&gt;)</code> constructed by <code>cost_obligations</code> (<code>help.rs:68</code>) and <code>payment_obligations_for</code> (<code>mana.rs:3685</code>), stepped natively in <code>CoupledSearch::pay_helped</code> (<code>coupled.rs:784</code>) and <code>PaymentCandidate::{HelpTap, DelveExile}</code> (<code>coupled.rs:413</code>), lowered to <code>help_obligations</code> only for pure handoff (<code>coupled.rs:629</code>) and to <code>mana_and_life</code> for <code>SourcePolicy::FixedOnly</code> (<code>coupled.rs:177</code>).</td>
+      <td><strong>Yes</strong></td>
+      <td>Resolved Pass 5's biggest mismatch. Removed <code>DelveCost</code>, <code>CoupledPayment.delve</code>, suffix matching, and <code>paying_delve_cost</code> / <code>saved_delve</code> flags. <code>HelpedCost</code> carries exact remaining cost, permissions, and life in the obligation queue, hashes <code>(cost, waterbend, life)</code> in <code>CoupledMemoKey</code>, and feeds <code>PurposeProjection::for_model</code>.</td>
     </tr>
     <tr>
       <td><strong>Coupling roles &amp; ordinary-board fast path</strong> (Engine Budget): classify once per <code>PaymentModel</code> from a closed whitelist; uncoupled boards stay on pure <code>PaymentModel</code> + <code>PaymentCache</code> with zero forks.</td>
-      <td><code>BoardArithmeticProfile</code> (<code>mana/profile.rs</code>) + <code>CoupledPayment::new</code> returning <code>Option&lt;Self&gt;</code> + <code>coupling()</code> with <code>loses_rules</code> + <code>mana_ability_reads()</code> (<code>layers.rs:641</code>).</td>
+      <td><code>BoardArithmeticProfile</code> (<code>mana/profile.rs</code>) + <code>CoupledPayment::new</code> returning <code>Option&lt;Self&gt;</code> + <code>coupling()</code> with <code>loses_rules</code> + <code>mana_ability_reads()</code> (<code>layers.rs</code>).</td>
       <td><strong>Yes</strong></td>
-      <td><code>model.coupled()</code> is now O(1) (<code>self.coupled.as_ref()</code>), <code>mutating_caller</code> is computed once per model, non-tapping abilities promote on <code>writes_non_pt || loses_rules</code>, <code>cost_reduction_per</code> is scanned, and pure handoff clears <code>source.untapped</code> on <code>Mutator</code> fixed taps.</td>
+      <td><code>model.coupled()</code> is O(1) (<code>self.coupled.as_ref()</code>), <code>mutating_caller</code> is computed once per model, non-tapping abilities promote on <code>writes_non_pt || loses_rules</code>, <code>cost_reduction_per</code> is scanned, and pure handoff clears <code>Mutator</code> tap/help flags.</td>
     </tr>
     <tr>
-      <td><strong>Manual payment offers on a coupled board</strong>: every completing fixed tap, simple choice tap, activated mana ability, help tap, or Delve exile is offered across announced and resolution payments.</td>
-      <td><code>compute_announced_mana_actions</code>, <code>resolution_mana_actions</code> (<code>explicit</code> includes <code>model.coupled().is_some()</code>), <code>useful_payment_taps</code>, <code>help_taps</code>, and <code>delve_payment_objects</code>.</td>
+      <td><strong>Manual payment offers on a coupled board</strong>: every completing fixed tap, simple choice tap, activated mana ability, help tap, or Delve exile is offered across announced and resolution payments; stranding steps are omitted.</td>
+      <td><code>compute_announced_mana_actions</code>, <code>resolution_mana_actions</code>, <code>useful_payment_taps</code>, <code>help_taps</code>, and <code>delve_payment_objects</code> routing through <code>PaymentModel</code> / <code>CoupledPayment</code>.</td>
       <td><strong>Yes</strong></td>
-      <td>All reachable offer and execution surfaces route through <code>PaymentModel</code> / <code>CoupledPayment</code>, including resolution choice taps and Delve exile validation. (Feasibility accuracy for combined help+Delve/Improvise/Waterbend depends on fixing the <code>CoupledSearch</code> representation above.)</td>
+      <td>Every offer and execution surface passes coupled obligations (<code>payment_obligations_for</code> / <code>cost_obligations</code>) and structured <code>PaymentCandidate</code> steps; uncoupled callers retain the fast pure path untouched.</td>
     </tr>
     <tr>
-      <td><strong>In-flight mana spending for an upfront fee</strong> (<code>Decision::ManaSpend</code> with <code>SpendCompletion::Upfront</code>): spending must leave the activation's own life cost, source presence, and enclosing callers payable.</td>
-      <td><code>mana_spend_choices</code> (<code>mana.rs:6076</code>) → <code>PaymentCandidate::Spend</code> and <code>fund_upfront</code> sharing <code>complete_upfront</code> (<code>coupled.rs:933</code>).</td>
+      <td><strong>In-flight mana spending for an upfront fee</strong> (<code>Decision::ManaSpend</code> with <code>SpendCompletion::Upfront</code>): spending must leave the activation's own life cost, source presence, and enclosing callers (including helped spells) payable.</td>
+      <td><code>mana_spend_choices</code> (<code>mana.rs:6120</code>) → <code>PaymentCandidate::Spend</code> and <code>fund_upfront</code> sharing <code>complete_upfront</code> (<code>coupled.rs:905</code>); <code>native_mana_obligations</code> drains only native upfront prefix so outer <code>Obligation::Helped</code> survives.</td>
       <td><strong>Yes</strong></td>
-      <td>One shared helper guards both permanent presence and <code>life_budget(player).can_pay(life_cost)</code> before <code>complete_mana_upfront</code>.</td>
+      <td>One shared helper guards permanent presence and <code>life_budget(player).can_pay(life_cost)</code> before <code>complete_mana_upfront</code>; nested upfront spending over a helped spell preserves the enclosing <code>Obligation::Helped</code>.</td>
     </tr>
     <tr>
       <td><strong>Equivalent payment states reached in different orders</strong> (transposition memoization + single mana pool).</td>
-      <td><code>CoupledMemoKey</code> (<code>coupled.rs:271</code>) + live <code>fork.state.players[player].mana_pool</code>.</td>
+      <td><code>CoupledMemoKey</code> (<code>coupled.rs:278</code>) + live <code>fork.state.players[player].mana_pool</code>.</td>
       <td><strong>Yes</strong></td>
-      <td>Sound <code>Hash</code>/<code>Eq</code> contract excluding event logs, priority, and <code>id_gen</code>; uses one real mana pool so <code>Condition::UnspentManaAtLeast</code> stays exact.</td>
+      <td>Structural equality and hash exclude event logs, priority, and <code>id_gen</code>; <code>obligations</code> directly carries <code>Obligation::Helped</code> with sound <code>Hash</code>/<code>Eq</code> (<code>cost</code>, <code>waterbend</code>, <code>life</code>); single live pool keeps <code>Condition::UnspentManaAtLeast</code> exact.</td>
     </tr>
     <tr>
       <td><strong>Fixed-mana tap whose triggered bonus opens a color choice</strong> (CR 106.12a / 605.4a).</td>
@@ -86,105 +85,80 @@
   </tbody>
 </table>
 
-<h2>Concrete interaction walk: where the split representation breaks</h2>
+<h2>Concrete interaction walk: normal path, failure, and recovery</h2>
 
-<p>Walk three legal Magic positions through <code>CoupledSearch::expand</code> at <code>HEAD</code> (<code>52fb812008</code>):</p>
+<p>Walking the coupled helped-cost interactions and boundary cases through <code>HEAD</code> (<code>f3779cb5b2</code>):</p>
 
 <ol>
-  <li><strong>Improvise / Waterbend / off-color Convoke tap needed before a <code>tapped</code>-reading mana source (no Delve involved):</strong>
-    Board: an untapped non-mana artifact, a mana source with <code>{T}: Add {G}</code> if you control a tapped artifact else <code>{C}</code> (<code>profile.stateful_tap() == true</code>), casting a <code>{1}{G}</code> Improvise (or Waterbend 1) spell.
-    <br><strong>Legal line:</strong> Tap the artifact via Improvise/Waterbend to pay <code>{1}</code> (now you control a tapped artifact), activate the source for <code>{G}</code>, spend <code>{G}</code>.
-    <br><strong>Failure in <code>HEAD</code>:</strong> <code>help_obligations</code> → <code>tap_obligations</code> flattens <code>{1}{G}</code> into <code>[Obligation::Pay { cost: {G}, taps: Taps::None }, Obligation::Pay { cost: {1}, taps: Taps::Keyword }]</code>.
-    In <code>expand()</code>: pure handoff strips both permanents (<code>*fixed == Mutator</code>); the production loop tries the mana source first (no tapped artifact yet → produces <code>{C}</code> → fails); then <code>expand()</code> reaches line 772 with <code>first = Pay { {G}, Taps::None }</code>, calls <code>try_help_taps</code>, which checks only <code>obligations.first()</code> (line 824), sees <code>taps == Taps::None</code> (line 828), and returns <code>None</code>. <strong>The legal cast is falsely pruned.</strong> The same failure hits off-color Convoke (tapping a white creature for <code>{1}</code> of <code>{1}{G}</code> sits in <code>obligations[1]</code> behind <code>Pay { {G}, Taps::Convoke }</code>).
+  <li><strong>Improvise / Waterbend / off-color Convoke tap before a <code>tapped</code>-reading mana source:</strong>
+    Casting a <code>{1}{G}</code> Improvise spell with an untapped artifact and a source that makes <code>{G}</code> only if you control a tapped artifact.
+    <code>cost_obligations</code> emits <code>[Obligation::Helped({1}{G}, improvise)]</code>. Pure handoff strips <code>Mutator</code> taps and returns <code>None</code>; the production loop tries the mana source first (produces <code>{C}</code>, fails); <code>pay_helped</code> queries <code>game.tap_payments(&amp;helped.cost, helped.permissions, source.permanent)</code> directly on the whole remaining cost, taps the artifact via <code>PaymentCandidate::HelpTap</code>, shrinks <code>helped.cost</code> to <code>{G}</code>, and the child fork taps the now-enabled source for <code>{G}</code> and completes. Only the completing Improvise tap is offered first.
   </li>
-  <li><strong>Convoke-then-sacrifice+Delve on a non-<code>stateful_delve</code> board:</strong>
-    Board: empty graveyard, 1 Mountain (<code>{R}</code>), and 1 red creature with <code>Sacrifice this creature: Add {R}</code> (<code>tap_source == false</code>, e.g. Skirk Prospector), casting a <code>{2}{R}{R}</code> Delve + Convoke spell. Here <code>profile.stateful_delve()</code> is <code>false</code>, while <code>CoupledPayment::new</code> returns <code>Some</code> via <code>facts.sacrifices &amp;&amp; help.delve.is_some()</code>.
-    <br><strong>Legal line:</strong> Tap the creature via Convoke for <code>{R}</code> (leaving <code>{2}{R}</code>), sacrifice the tapped creature for <code>{R}</code> (putting 1 card in graveyard for <code>{1}</code> Delve), tap Mountain for <code>{R}</code>.
-    <br><strong>Failure in <code>HEAD</code>:</strong> Sacrificing first loses the convoke tap (<code>{1}{R}{R}</code> &lt; <code>{2}{R}{R}</code>). <code>try_help_taps</code> then convokes <code>{R}</code>, hits line 850 (<code>.filter(|_| paying_delve_cost &amp;&amp; self.payment.profile.stateful_delve())</code>), evaluates <code>next_delve = None</code>, and recurses with <code>delve = None</code> and <code>rest = [Pay { {2}{R} }]</code> (0 graveyard cards frozen). When the child fork sacrifices the creature to the graveyard, <code>delve</code> is gone, so the graveyard card is never counted and <strong>the legal cast is falsely pruned.</strong>
+  <li><strong>Convoke before sacrificing for mana and exiling for Delve:</strong>
+    Casting a <code>{2}{R}{R}</code> Convoke + Delve spell with an empty graveyard, a Mountain, and a red creature with <code>Sacrifice this creature: Add {R}</code>.
+    <code>CoupledPayment::new</code> enters coupled mode via <code>facts.sacrifices &amp;&amp; help.delve.is_some()</code> (<code>stateful_delve() == false</code>). Sacrificing first strands; <code>pay_helped</code> convokes the red creature (shrinking <code>helped.cost</code> to <code>{2}{R}</code> while keeping <code>helped.permissions.help.delve = Some(spell)</code> intact); the child fork sacrifices the tapped creature for <code>{R}</code> (putting 1 card in graveyard), taps the Mountain for <code>{R}</code>, and <code>cost_after_delve</code> reduces <code>{2}{R}</code> to <code>{1}{R}</code>, which the pool pays.
   </li>
-  <li><strong>Spending a colored pip before Delving generic mana on a <code>stateful_delve()</code> board:</strong>
-    Board: 1 card in graveyard, <code>{G}{G}</code> in pool (or from a mana source), 1 untapped artifact, casting a <code>{2}{G}{G}</code> Delve + Improvise spell beside a graveyard-reading source (<code>stateful_delve() == true</code>).
-    <br><strong>Failure in <code>HEAD</code>:</strong> <code>concrete</code> strips Delve (<code>permissions.help.delve = None</code>, line 647) and splits into <code>[Pay { {G}{G}, None }, Pay { {2}, Keyword }]</code>. When <code>expand()</code> reaches line 771, <code>saved_delve</code> becomes <code>None</code>; line 776 sees <code>pool.can_pay({G}{G})</code> and spends the colored tier with <code>tail = [Pay { {2}, Keyword }]</code> and <code>saved_delve = None</code>—dropping Delve on the generic tail (if <code>DelveExile</code> had to wait behind a mana-reading or pool-spending step, that branch silently loses Delve).
+  <li><strong>Improvise before Delve removes the artifact type (failure &amp; recovery):</strong>
+    A Mountain that is an Artifact only while graveyard &ge; 1, 1 card in graveyard, <code>{G}{G}</code> in pool, casting <code>{2}{G}{G}</code> Delve + Improvise.
+    <code>delve_payment_objects</code> probes <code>PaymentCandidate::DelveExile(graveyard)</code>: on the post-exile fork, <code>pure_payment_model</code> rebuilds <code>payment_sources</code> from current characteristics, the Mountain is no longer an artifact (<code>waterbend == false</code>), and the branch fails—so exiling first is pruned. Probing <code>PaymentCandidate::HelpTap(helper, Improvise)</code> leaves the graveyard intact, then exiles the graveyard card and spends <code>{G}{G}</code>. Only the Improvise tap is offered first, then only the Delve exile, then <code>PayCost</code>.
   </li>
-  <li><strong>Recovery / aligned model:</strong> Carry one <code>HelpedCost { cost, permissions, life }</code> on <code>CoupledPayment</code> / <code>CoupledSearch</code> whenever <code>permissions.help != Help::default() || permissions.waterbend &gt; 0</code>. In <code>expand()</code>: build <code>concrete</code> via <code>help_obligations</code> only for the pure handoff; try every legal help tap (Convoke colored or generic, Improvise generic, Waterbend generic) and every <code>DelveExile</code> (when <code>profile.stateful_delve()</code>) directly against <code>helped.after_pip(...)</code>; and commit <code>self.spend</code> only against the full remaining mana cost (reduced by graveyard cards when <code>!profile.stateful_delve()</code>), then pay <code>helped.life</code>. Also skip matching <code>self.helped</code> when <code>policy == SourcePolicy::FixedOnly</code> so <code>automatic_payability</code> never aliases a 0-graveyard Delve cost.</li>
+  <li><strong>Nested upfront mana fee and <code>FixedOnly</code> boundary:</strong>
+    When activating a mana ability with an upfront mana fee while paying a helped spell, <code>payment_obligations_for</code> produces <code>[upfront_fee, Output, Obligation::Helped(spell)]</code>; <code>coupled.plan</code> drains only <code>native_mana_obligations</code> (the upfront fee and output), keeping <code>Obligation::Helped(spell)</code> for the continuation after <code>complete_upfront</code>. Conversely, <code>automatic_payability</code> and <code>automatic_taps</code> use <code>SourcePolicy::FixedOnly</code>, which lowers any <code>Obligation::Helped</code> to plain <code>Obligation::mana_and_life</code> so automatic mana-only routes never alias help taps or Delve.
+  </li>
 </ol>
 
-<h2>Biggest mismatch: pre-flattened <code>tap_obligations</code> + <code>DelveCost</code> side-channel inside <code>CoupledSearch</code></h2>
+<h2>Pass 6 resolution: unifying helped costs into <code>Obligation::Helped</code></h2>
 
-<p>The pure solver flattens a helped cost into ordered tiers because tap order cannot mutate the board:</p>
+<p>Pass 6 moved the whole helped-cost contract onto one variant in <code>Obligation</code> and one native step handler in <code>coupled.rs</code>:</p>
 
-<lf-file path="managym/src/flow/mana.rs" lines="6476-6507"></lf-file>
-
-<p>Reusing that flattened list beside a Delve-only side-channel in <code>coupled.rs</code> creates three fragile seam conditions:</p>
-
-<lf-diff path="managym/src/flow/mana/coupled.rs" lines="643-652">
-  <lf-note line="646">Clears <code>permissions.help.delve</code> using initial <code>self.payment.profile</code>, producing split obligations in <code>concrete</code>.</lf-note>
+<lf-diff path="managym/src/flow/mana.rs" lines="638-646">
+  <lf-note line="644">One unsplit <code>Obligation::Helped(Box&lt;HelpedCost&gt;)</code> carries remaining cost, permissions, and life in the ordered obligation list.</lf-note>
 </lf-diff>
 
-<lf-diff path="managym/src/flow/mana/coupled.rs" lines="765-787">
-  <lf-note line="771"><code>saved_delve = None</code> drops Delve as soon as <code>self.spend</code> pays only the first split tier (<code>obligations[0]</code>).</lf-note>
+<lf-diff path="managym/src/flow/mana/help.rs" lines="68-85">
+  <lf-note line="76">Coupled queries emit <code>Obligation::Helped</code> directly; uncoupled queries keep the pure tier split in <code>help_obligations</code>.</lf-note>
 </lf-diff>
 
-<lf-diff path="managym/src/flow/mana/coupled.rs" lines="816-873">
-  <lf-note line="824">Inspects only <code>obligations.first()</code>: generic Improvise, Waterbend, and off-color Convoke taps live in <code>obligations[1]</code> behind colored pips, so <code>taps == Taps::None</code> exits early.</lf-note>
-  <lf-note line="850">Gating <code>next_delve</code> on <code>self.payment.profile.stateful_delve()</code> drops <code>delve</code> after a Convoke tap on sacrifice-coupled boards.</lf-note>
+<lf-diff path="managym/src/flow/mana/coupled.rs" lines="784-846">
+  <lf-note line="798">Delve exiles fork natively on <code>stateful_delve()</code> boards; otherwise <code>cost_after_delve</code> folds graveyard cards into the full-cost spend.</lf-note>
+  <lf-note line="825">Help taps query <code>game.tap_payments</code> against the unsplit <code>helped.cost</code> on every fork, keeping Convoke, Improvise, Waterbend, and Delve composable in any order.</lf-note>
 </lf-diff>
 
 <lf-component name="before-after">
   <div slot="before">
-    <h4>Built at <code>HEAD</code> (<code>52fb812008</code>)</h4>
+    <h4>Before Pass 6 (<code>52fb812008</code>)</h4>
     <ul>
-      <li><code>CoupledPayment.delve: Option&lt;DelveCost&gt;</code> tracks only Delve; Convoke, Improvise, and Waterbend rely on pre-flattened <code>tap_obligations</code> tiers.</li>
-      <li><code>try_help_taps</code> reads only <code>obligations.first()</code>, returning <code>None</code> when colored pips sit ahead of generic Improvise/Waterbend/Convoke tiers.</li>
-      <li><code>try_help_taps</code> gates <code>next_delve</code> on <code>stateful_delve()</code>, dropping <code>delve</code> after a Convoke tap when coupling came from a sacrifice mana source.</li>
-      <li><code>expand()</code> sets <code>saved_delve = None</code> before <code>self.spend</code> on <code>obligations[0]</code>, losing Delve on any remaining split tier.</li>
-      <li><code>CoupledMemoKey::hash</code> hashes only <code>delve.cost</code> (omitting <code>permissions.waterbend</code>, colliding waterbend-remaining states).</li>
+      <li><code>CoupledPayment.delve: Option&lt;DelveCost&gt;</code> tracked only Delve beside pre-flattened <code>tap_obligations</code> tiers recovered by suffix matching.</li>
+      <li><code>try_help_taps</code> checked only <code>obligations.first()</code>, hiding generic Improvise, Waterbend, and off-color Convoke taps behind colored pips.</li>
+      <li><code>next_delve</code> was gated on <code>stateful_delve()</code>, dropping Delve after a Convoke tap on sacrifice-coupled boards.</li>
+      <li>Partial-tier spends set <code>saved_delve = None</code>, stripping Delve from the generic tail.</li>
     </ul>
   </div>
   <div slot="after">
-    <h4>Aligned design (one <code>HelpedCost</code> in <code>CoupledSearch</code>)</h4>
+    <h4>After Pass 6 (<code>f3779cb5b2</code>)</h4>
     <ul>
-      <li>Rename <code>DelveCost</code> → <code>HelpedCost</code> and attach it for any helped cost (<code>help != Help::default() || waterbend &gt; 0</code>) on a coupled model; ignore it on <code>SourcePolicy::FixedOnly</code>.</li>
-      <li><code>help_obligations</code> builds <code>concrete</code> only for the pure handoff; native search steps operate directly on <code>HelpedCost</code> without splitting tiers.</li>
-      <li><code>try_help_taps</code> tests every legal Convoke (colored or generic), Improvise (generic), and Waterbend (generic) tap directly against <code>helped.cost</code> and <code>helped.permissions</code>, always advancing via <code>helped.after_pip(color, waterbend)</code> (preserving <code>delve</code> unconditionally).</li>
-      <li><code>expand()</code> spends the full remaining <code>helped.cost</code> (less graveyard Delve cards when <code>!profile.stateful_delve()</code>) in one <code>self.spend</code> transition, then continues to <code>Obligation::PayLife(helped.life)</code>.</li>
-      <li><code>CoupledMemoKey::hash</code> hashes <code>(&amp;helped.cost, helped.permissions.waterbend)</code>; uncoupled boards remain untouched.</li>
+      <li><code>Obligation::Helped(Box&lt;HelpedCost&gt;)</code> sits directly in the ordered obligations list; no side-channel or suffix matching exists.</li>
+      <li><code>pay_helped</code> evaluates Delve exiles, full-cost spending, and every legal Convoke / Improvise / Waterbend tap directly against the unsplit <code>HelpedCost</code> on each fork.</li>
+      <li><code>help_obligations</code> lowers <code>Obligation::Helped</code> only for pure handoff and uncoupled queries; <code>FixedOnly</code> lowers it to plain <code>mana_and_life</code>.</li>
+      <li><code>CoupledMemoKey</code> hashes <code>obligations</code> directly (including <code>cost</code>, <code>waterbend</code>, and <code>life</code>), and <code>PurposeProjection</code> reads <code>&amp;helped.cost</code>.</li>
     </ul>
   </div>
 </lf-component>
 
 <h2>Findings</h2>
 
-<lf-component name="decision" id="f1" title="F1 · Unify helped costs in CoupledSearch as one HelpedCost instead of split tap_obligations + DelveCost (This work)" recommendation="Fix here">
-  <p><strong>Scope:</strong> This work (closes the remaining coupled-authority rule gaps introduced in Pass 5).</p>
-  <p><strong>What breaks:</strong></p>
+<lf-component name="decision" id="f1" title="F1 · Confirm hash v36 and headless design choices before merge (Irreversible once released)" recommendation="Fix here">
+  <p><strong>Scope:</strong> This work (release/merge confirmation; no code defect found).</p>
+  <p><strong>Context:</strong> All conceptual gaps from Passes 1–5 are closed on <code>HEAD</code> (<code>f3779cb5b2</code>). Pre-implementation choices (1a–5a), post-Pass-4 choices (1a–3a), and post-Pass-5 choice (1a: unified <code>Obligation::Helped</code>) were adopted headless and have not yet had human sign-off. One choice is irreversible once shipped:</p>
   <ul>
-    <li>Generic Improvise, Waterbend, or off-color Convoke taps needed before a <code>tapped</code>-reading mana source are invisible to <code>try_help_taps</code> because <code>tap_obligations</code> places colored pips at <code>obligations[0]</code> and <code>try_help_taps</code> checks only <code>obligations.first()</code>.</li>
-    <li>Convoking a non-tapping sacrificing creature (e.g., Skirk Prospector) before sacrificing it to fund Delve fails because line 850 drops <code>delve</code> whenever <code>stateful_delve()</code> is false.</li>
-    <li>Spending only the first tier of a split <code>concrete</code> obligation drops <code>delve</code> on the tail via <code>saved_delve = None</code>.</li>
-  </ul>
-  <p><strong>Recommendation:</strong> Generalize <code>DelveCost</code> to <code>HelpedCost</code> in <code>coupled.rs</code> (populated by <code>track_helped</code> whenever <code>help != Help::default() || permissions.waterbend &gt; 0</code>, ignored on <code>SourcePolicy::FixedOnly</code>) so <code>try_help_taps</code>, <code>DelveExile</code>, and full-cost <code>spend</code> operate on one unsplit cost record; use <code>profile.stateful_delve()</code> from the current fork's board and hash <code>waterbend</code> alongside <code>cost</code> in <code>CoupledMemoKey</code>. Add focused tests for (a) Improvise/Waterbend tap enabling a <code>tapped</code>-reading mana source for a colored pip and (b) Convoke-then-sacrifice+Delve.</p>
-  <p><strong>Passed over:</strong> Patching <code>try_help_taps</code> to loop over <code>obligations</code> indices while keeping <code>DelveCost</code> separate (leaves the dual representation, the <code>paying_delve_cost</code>/<code>saved_delve</code> flags, and the partial-tier spend split in place).</p>
-</lf-component>
-
-<lf-component name="decision" id="f2" title="F2 · Confirm hash v36 and headless design choices before merge (Irreversible once released)" recommendation="Fix here">
-  <p><strong>Scope:</strong> This work (release/merge confirmation; no code defect).</p>
-  <p><strong>Context:</strong> Pre-implementation choices (1a–5a) and post-Pass-4 choices (1a–3a) were adopted headless and are now implemented cleanly on <code>HEAD</code>. One choice is irreversible once shipped:</p>
-  <ul>
-    <li><code>MATCH_STATE_HASH_VERSION</code> moved <code>35 → 36</code> (<code>managym/src/state/hash.rs:29</code>) to serialize finalized <code>ActivatedAbilityDefinition</code> and <code>acquired: Option&lt;GrantKey&gt;</code> in <code>PendingChoice::ActivationX</code>, <code>ActivatedTargeting</code>, and <code>Operation::Activation</code>. Because <code>origin/main</code> (<code>606e79e90a</code>) is already at v35, v36 is required; delivery still refreshes Academy fixtures and records the v36 Engine Budget baseline.</li>
+    <li><code>MATCH_STATE_HASH_VERSION</code> moved <code>35 → 36</code> (<code>managym/src/state/hash.rs:29</code>) to serialize finalized <code>ActivatedAbilityDefinition</code> and <code>acquired: Option&lt;GrantKey&gt;</code> in <code>PendingChoice::ActivationX</code>, <code>ActivatedTargeting</code>, and <code>Operation::Activation</code>. Because <code>origin/main</code> (<code>606e79e90a</code>) is already at v35, v36 is required; delivery refreshes Academy fixtures and records the v36 Engine Budget baseline.</li>
   </ul>
 </lf-component>
 
 <h2>Questions</h2>
 
-<div data-choice="q1" data-label="1 · Helped mana costs inside CoupledSearch (F1)">
-  <h3>1. How should helped mana costs (Convoke, Improvise, Waterbend, Delve) be represented inside <code>CoupledSearch</code>?</h3>
-  <button data-value="1a">1a · (Recommended) Unify into one <code>HelpedCost</code> record on <code>CoupledPayment</code> / <code>CoupledSearch</code> so help taps, Delve exiles, and full-cost spending act directly on the unsplit cost, using <code>help_obligations</code> only for pure handoff</button>
-  <button data-value="1b">1b · Keep <code>DelveCost</code> + flattened <code>tap_obligations</code>, patch <code>try_help_taps</code> to scan all <code>Obligation::Pay</code> items and drop the <code>stateful_delve()</code> gate, and guard <code>saved_delve</code> on partial spends</button>
-</div>
-
-<div data-choice="q2" data-label="2 · Confirm hash v36 and headless choices (F2)">
-  <h3>2. Confirm keeping <code>MATCH_STATE_HASH_VERSION = 36</code> and the headless choices adopted across Passes 1–5?</h3>
-  <button data-value="2a">2a · (Recommended) Confirm v36 and the implemented coupled-search / fixed-tap / owned-activation model</button>
-  <button data-value="2b">2b · Revisit one of the adopted designs before delivery (note which below)</button>
+<div data-choice="q1" data-label="1 · Confirm hash v36 and headless choices (F1)">
+  <h3>1. Confirm keeping <code>MATCH_STATE_HASH_VERSION = 36</code> and the headless choices adopted across Passes 1–6?</h3>
+  <button data-value="1a">1a · (Recommended) Confirm v36 and the implemented coupled-search / unified <code>Obligation::Helped</code> / fixed-tap / owned-activation model</button>
+  <button data-value="1b">1b · Revisit one of the adopted designs before delivery (note which below)</button>
 </div>
