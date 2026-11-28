@@ -20,7 +20,7 @@ Ordinary boards, TLA Limited included, keep their offers and order and stay on t
 
 `PaymentModel` (`managym/src/flow/mana.rs`) stays the one feasibility authority. Every consumer already reaches it through `Game::payment_model` / `announced_model` and then `plan`, `plan_after_tap`, `payable`, `payable_after_tap` or `witness` (≈45 call sites in `mana.rs`, `mana/help.rs`, `mana/interchangeable.rs`, `mana/autotapper.rs`, `mana/preview.rs`). `cached_plan` (≈2582) is the choke point for the first four. The coupled regime is a second answer path behind that same surface, never a parallel API.
 
-## Concept review (`scratch/concept-review.html`, pre-implementation, at `4a25a7a28f`)
+## Pre-implementation concept review (at `4a25a7a28f`)
 
 All five questions were answered headless with the review's recommended option, **made for review, not settled**; `ship-review` should surface them. Each is folded into the passes below:
 
@@ -53,9 +53,24 @@ Drafted in place before implementation (read these when building and reviewing):
 - `managym/README.md` — owned non-mana activations, coupled `PaymentModel` fork search and `OrderReplacement` filtering, fixed-tap bonus choices in manual/automatic payment, and `needs_choice` on hovered fixed taps that open a bonus choice.
 - `docs/engine.md` — `MATCH_STATE_HASH_VERSION` v35 → v36 and snapshot restore compatibility.
 
-## Next
+## Post-implementation concept review (`scratch/concept-review.html`, at `b0cd922864`)
 
-Review the four implementation passes. Refresh Academy fixtures with `uv run --extra dev python scripts/refresh_academy_fixtures.py` and verify conformance receipts. Run the full debug suites and Engine Budget in delivery. Record an Engine Budget baseline for the v36 digest change only after verifying the budget result.
+Passes 1 and 4 and the memo key/replacement-order design were judged aligned. Four findings land in Pass 5; the three review questions are adopted headless with the recommended option (1a, 2a, 3a), **made for review, not settled**. Passed over: 1b (every ability Sensitive; breaks the 207-state `{15}` bound), 2b (leave Delve unchecked, separate Task), 3b (per-call recompute, rely on Engine Budget). F5 (hash v36) needs no code: origin/main is at v35 with MTG-500 merged, so v36 stays.
+
+## Pass 5 · Close the coupled authority's gaps (next)
+
+One fix pass, each item with a regression built from a Pass 3 board variation in `managym/src/flow/mana/tests/manual_payment/coupled_boards.rs`:
+
+1. **Classifier blind spots (F1).** `coupling()` (`mana/coupled.rs` ≈88) makes any ability Sensitive on `facts.reads || profile.writes_non_pt || loses_rules || (tap_source && profile.stateful_triggers)`, with `loses_rules` passed in instead of applied only to `fixed`. `mana_ability_reads()` (`layers.rs` ≈641) scans `cost_reduction_per`. The pure handoff (`coupled.rs` ≈607) sets `source.untapped = false` for a Mutator fixed source under `stateful_tap()`, so `Obligation::Tap` cannot tap inside `cached_plan`. Regressions: White Lotus Tile discount on a non-tapping `{1}{R}, Pay 1 life: Add {G}{G}` beside `Remove a +1/+1 counter: Add {B}`, paying `{G}{G}{B}` (castable, ability 0 first); a `cost_reduction_per` predicate reading `tapped`. Keep the `{15}` rejection at 207 fork states (or record the new pinned count if it moves and stays small).
+2. **Resolution payments keep choice-tap lands (F2).** `resolution_mana_actions` (`mana.rs` ≈4212) adds `|| model.coupled().is_some()` to `explicit`, matching `compute_announced_mana_actions`. Regression: Ward/resolving payment on a coupled board with an automatic route offers the choice-tap land.
+3. **Upfront life and Delve (F3).** One guard (life budget + source presence) shared by `fund_upfront` (≈825) and `PaymentCandidate::Spend` (≈397). Delve on a board with stateful abilities, statics or triggers is coupled; add `PaymentCandidate::DelveExile(ObjectId)` and filter `help_actions` (`payment.rs` ≈1675) and the execution check (≈1250) through it. Regression: `{1}{G}{G}{G}` Delve spell, one graveyard card, Forest, and a `GraveyardAtLeast { count: 1 }` source (`{G}{G}` else `{G}`): the exile is not offered and the cast completes by taps.
+4. **Classify once per model (F4).** `PaymentModel` holds the coupling decision computed at construction (recomputed only where `mark_help_taps` changes `help.delve`); uncoupled boards build no `CoupledPayment` and allocate no reservations. Compute the suspended suffix's life delta once (at announcement or in `CoupledPayment::new`) so `has_mutating_caller()` never clones `Game` per call. Drop the redundant `stateful_tap()` check (≈43).
+
+Teaches: whether the closed whitelist holds once non-tapping and graveyard-coupled steps join it, and whether the fast path is truly free on ordinary boards.
+
+## Delivery (after Pass 5)
+
+Refresh Academy fixtures with `uv run --extra dev python scripts/refresh_academy_fixtures.py` and verify conformance receipts. Run the full debug suites and Engine Budget. Record an Engine Budget baseline for the v36 digest change only after verifying the budget result.
 
 ## Acceptance check
 

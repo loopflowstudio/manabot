@@ -10,3 +10,4 @@
 - The haste fixture grants haste while a creature has a +1/+1 counter. This exercises the planned eligibility change using the engine's existing counter kinds.
 - Pass 3's upfront-grant regression exposed a missing `PayCost` when the pool needed a fixed tap. The native search now tries increasing exact-tap budgets before the upfront fee and uses the full mana-source search for the callers it resumes.
 - Pass 4 includes the acquired grant key in announced state. Catalog serialization omits that key, which a linked ability needs after its static grant ends.
+- Post-implementation concept review (at `b0cd922864`) questions 1–3 adopted headless with the recommended option: promote non-tapping abilities to Sensitive on `writes_non_pt`/`loses_rules` (1a), check Delve exiles natively on graveyard-coupled boards (2a), classify coupling once per `PaymentModel` (3a). No human sign-off.
