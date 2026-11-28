@@ -494,7 +494,8 @@ async def play_pairings(
         nonlocal current_space, source_exhausted, legs_per_match_hint
         while not source_exhausted and len(pending_legs) < needed_legs:
             capacity = slots - max(len(deferred_matches), len(ready_errors))
-            if capacity == 0:
+            # One failed forward can settle live and deferred deals at once.
+            if capacity <= 0:
                 break
             missing = needed_legs - len(pending_legs)
             request_count = min(capacity, math.ceil(missing / legs_per_match_hint))
